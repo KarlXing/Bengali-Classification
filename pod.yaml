@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bengali-test4
+spec:
+  containers:
+  - name: gpu-container
+    image: jinwei/imagehome:kaggle
+    imagePullPolicy: Always
+    args: ["sleep", "36500000"]
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        memory: 8Gi
+      requests:
+        cpu: 2
+        memory: 8Gi
+    volumeMounts:
+      - mountPath: /pv
+        name: kg4
+  nodeSelector:
+    gpu-type: 1080Ti
+  volumes:
+    - name: kg4
+      persistentVolumeClaim:
+          claimName: kg4
