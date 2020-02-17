@@ -11,7 +11,6 @@ import torch.nn.functional as F
 import torchvision
 from torch.utils import model_zoo
 
-from tqdm import tqdm_notebook as tqdm
 import cv2
 import time
 from pathlib import Path

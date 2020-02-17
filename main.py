@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from utils import load_image, BengaliAIDataset, Transform
-from model import SENet
+from model import SENet, SEResNeXtBottleneck
 import torch
 import argparse
 
@@ -16,15 +16,14 @@ args = parser.parse_args()
 
 
 def main():
-    # config
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # create model
-    model = SENet().to(device)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16).to(device)
 
     # create dataset
     images = load_image(args.data_path)
-    train_pd = pd.read_csv(data_path_original+'train.csv')
+    train_pd = pd.read_csv(args.data_path+'/train.csv')
     labels = train_pd[['grapheme_root', 'vowel_diacritic', 'consonant_diacritic']].values
     
     num_train = int(images.shape[0]/5*4)
@@ -50,6 +49,7 @@ def main():
     size=(128, 128), threshold=5., sigma=-1.)  
     test_dataset = BengaliAIDataset(train_images, test_labels,
                                  transform=train_transform)
+
 
 
 
