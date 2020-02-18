@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
+import torch.nn.functional as F
 
 
 
@@ -62,7 +63,7 @@ def dovalid(model, dataloader):
 def dotrain(model, optimizer, criterion, inputs, y1_onehot, y2_onehot, y3_onehot):
     model.train()
     output = model(inputs)
-    logid1, logid2, logid3 = output[:,: 168], output[:,168: 168+11], output[:,168+11:]
+    logit1, logit2, logit3 = output[:,: 168], output[:,168: 168+11], output[:,168+11:]
     logit1 = F.softmax(logit1, dim=1)
     logit2 = F.softmax(logit2, dim=1)
     logit3 = F.softmax(logit3, dim=1)
