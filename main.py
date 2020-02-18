@@ -27,16 +27,6 @@ parser.add_argument('--save-path', default="/pv/kaggle/bengali/", help="path to 
 args = parser.parse_args()
 
 
-
-def update_one_hot(labels, y1_onehot, y2_onehot, y3_onehot):
-    y1_onehot.zero_()
-    y2_onehot.zero_()
-    y3_onehot.zero_()
-    y1_onehot.scatter_(1, labels[:, 0:1], 1)
-    y2_onehot.scatter_(1, labels[:, 1:2], 1)
-    y3_onehot.scatter_(1, labels[:, 2:3], 1)
-
-
 def dovalid(model, dataloader):
     model.eval()
     num_data = 0
@@ -60,25 +50,26 @@ def dovalid(model, dataloader):
 
 
 
-def dotrain(model, optimizer, criterion, inputs, y1_onehot, y2_onehot, y3_onehot):
+def dotrain(model, optimizer, criterion, inputs, labels):
     model.train()
+    optimizer.zero_grad()
     output = model(inputs)
     logit1, logit2, logit3 = output[:,: 168], output[:,168: 168+11], output[:,168+11:]
     logit1 = F.softmax(logit1, dim=1)
     logit2 = F.softmax(logit2, dim=1)
     logit3 = F.softmax(logit3, dim=1)
-    loss1 = criterion(logit1, y1_onehot)
-    loss2 = criterion(logit2, y2_onehot)
-    loss3 = criterion(logit3, y3_onehot)
-    pred1 = torch.max(logit1, axis=1).indices
-    pred2 = torch.max(logit2, axis=1).indices
-    pred3 = torch.max(logit3, axis=1).indices
-    acc1, acc2, acc3 = sum(pred1 == labels[:, 0])/pred1.shape[0], sum(pred2 == labels[:, 1])/pred3.shape[0], sum(pred3 == labels[:, 2])/pred3.shape[0] 
+    loss1 = criterion(logit1, labels[:, 0])
+    loss2 = criterion(logit2, labels[:, 1])
+    loss3 = criterion(logit3, labels[:, 2])
+    # pred1 = torch.max(logit1, axis=1).indices
+    # pred2 = torch.max(logit2, axis=1).indices
+    # pred3 = torch.max(logit3, axis=1).indices
+    # acc1, acc2, acc3 = sum(pred1 == labels[:, 0])/pred1.shape[0], sum(pred2 == labels[:, 1])/pred3.shape[0], sum(pred3 == labels[:, 2])/pred3.shape[0] 
 
-    (loss1+loss2+loss3).backward()
+    (2*loss1+loss2+loss3).backward()
     optimizer.step()
 
-    return [loss1.item(), loss2.item(), loss3.item()], [acc1, acc2, acc3]
+    return [loss1.item(), loss2.item(), loss3.item()]
 
 
 
@@ -129,9 +120,6 @@ def main():
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.0)
-    y1_onehot = torch.FloatTensor(args.batch_size, 168).to(device)
-    y2_onehot = torch.FloatTensor(args.batch_size, 11).to(device)
-    y3_onehot = torch.FloatTensor(args.batch_size, 7).to(device)
 
     writer = SummaryWriter()
     best_acc = 0
@@ -139,8 +127,7 @@ def main():
     for i in range(args.epochs):
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
-            update_one_hot(labels, y1_onehot, y2_onehot, y3_onehot)
-            train_loss, _ = dotrain(model, optimizer, criterion, inputs, y1_onehot, y2_onehot, y3_onehot)
+            train_loss = dotrain(model, optimizer, criterion, inputs, labels)
             writer.add_scalars('train loss', {'loss1':train_loss[0], 'loss2': train_loss[1], 'loss3': train_loss[2]}, i)
 
         train_acc = dovalid(model, train_loader)
