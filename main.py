@@ -27,7 +27,7 @@ parser.add_argument('--save-path', default="/pv/kaggle/bengali/", help="path to 
 args = parser.parse_args()
 
 
-def dovalid(model, dataloader):
+def dovalid(model, dataloader, device):
     model.eval()
     num_data = 0
     num_acc1, num_acc2, num_acc3 = 0, 0, 0
@@ -130,10 +130,10 @@ def main():
             train_loss = dotrain(model, optimizer, criterion, inputs, labels)
             writer.add_scalars('train loss', {'loss1':train_loss[0], 'loss2': train_loss[1], 'loss3': train_loss[2]}, i)
 
-        train_acc = dovalid(model, train_loader)
+        train_acc = dovalid(model, train_loader, device)
         writer.add_scalars('train acc', {'acc1':train_acc[0], 'acc2': train_acc[1], 'acc3': train_acc[2]}, i)
 
-        test_acc = dovalid(model, test_loader)
+        test_acc = dovalid(model, test_loader, device)
         writer.add_scalars('valid acc', {'acc1':test_acc[0], 'acc2': test_acc[1], 'acc3': test_acc[2]}, i)
 
         print("epoch %d done" % (i))
