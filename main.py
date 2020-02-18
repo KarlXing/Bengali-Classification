@@ -3,6 +3,7 @@ import pandas as pd
 from utils import load_image, BengaliAIDataset, Transform
 from model import SENet, SEResNeXtBottleneck
 import argparse
+import random
 
 
 import torch
@@ -100,8 +101,8 @@ def main():
     train_indices = random.sample(set(range(images.shape[0])), num_train)
     test_indices = [i for i in range(images.shape[0]) if i not in train_indices]
 
-    train_img = np.take(images, train_indices, axis=0)
-    test_img = np.take(images, test_indices, axis=0)
+    train_images = np.take(images, train_indices, axis=0)
+    test_images = np.take(images, test_indices, axis=0)
     train_labels = np.take(labels, train_indices, axis=0)
     test_labeles = np.take(labels, test_indices, axis=0)
 
@@ -118,8 +119,8 @@ def main():
 
     test_transform = Transform(
     size=(128, 128), threshold=5., sigma=-1.)  
-    test_dataset = BengaliAIDataset(train_images, test_labels,
-                                 transform=train_transform)
+    test_dataset = BengaliAIDataset(test_images, test_labels,
+                                 transform=test_transform)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
 
