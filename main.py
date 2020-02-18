@@ -91,7 +91,7 @@ def main():
                   downsample_kernel_size=1, downsample_padding=0,
                   num_classes=186).to(device)
 
-
+    print("Create Model Done")
     # create dataset
     images = load_image(args.data_path)
     train_pd = pd.read_csv(args.data_path+'/train.csv')
@@ -104,7 +104,7 @@ def main():
     train_images = np.take(images, train_indices, axis=0)
     test_images = np.take(images, test_indices, axis=0)
     train_labels = np.take(labels, train_indices, axis=0)
-    test_labeles = np.take(labels, test_indices, axis=0)
+    test_labels = np.take(labels, test_indices, axis=0)
 
 
     train_transform = Transform(
@@ -123,7 +123,7 @@ def main():
                                  transform=test_transform)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
-
+    print("DataLoader Done")
     # train code
 
     criterion = nn.CrossEntropyLoss()
