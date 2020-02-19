@@ -20,10 +20,11 @@ parser.add_argument('--train', default=True, help='train or test')
 parser.add_argument('--data-path', default="/kaggle/input/bengaliai-cv19/", help="path to training dataset")
 parser.add_argument('--test-fold', default=0, help="which fold for validation")
 parser.add_argument('--image-size', default=128, help="input image size for model")
-parser.add_argument('--epochs', default=150, help="epochs to train")
+parser.add_argument('--epochs', default=300, help="epochs to train")
 parser.add_argument('--batch_size', default=64, help="batch size")
 parser.add_argument('--save-path', default="/pv/kaggle/bengali/", help="path to save model")
 parser.add_argument('--lr', default=0.001, help="learning rate")
+parser.add_argument('--optim', default='sgd', help="pytorch optimizer")
 
 args = parser.parse_args()
 
@@ -120,7 +121,10 @@ def main():
     # train code
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.0)
+    if args.optim == 'sgd':
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.0)
+    else:
+        optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     writer = SummaryWriter()
     best_acc = 0
