@@ -23,6 +23,7 @@ parser.add_argument('--image-size', default=128, help="input image size for mode
 parser.add_argument('--epochs', default=150, help="epochs to train")
 parser.add_argument('--batch_size', default=64, help="batch size")
 parser.add_argument('--save-path', default="/pv/kaggle/bengali/", help="path to save model")
+parser.add_argument('--lr', default=0.001, help="learning rate")
 
 args = parser.parse_args()
 
@@ -119,7 +120,7 @@ def main():
     # train code
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.0)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.0)
 
     writer = SummaryWriter()
     best_acc = 0
