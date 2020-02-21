@@ -25,9 +25,9 @@ import math
 
 def load_image(data_path, valid_fold, train=True):
     if train:
-        image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i) for i in range(4) if i != test_fold]
+        image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i) for i in range(4) if i != valid_fold]
     else:
-        image_df_list = [pd.read_parquet(data_path + 'train_image_data_%1d.feather' % i) for i in range(4) if i == test_fold]
+        image_df_list = [pd.read_parquet(data_path + 'train_image_data_%1d.feather' % i) for i in range(4) if i == valid_fold]
 
     HEIGHT = 137
     WIDTH = 236
