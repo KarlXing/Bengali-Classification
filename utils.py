@@ -23,11 +23,11 @@ from collections import OrderedDict
 import math
 
 
-def load_image(data_path, train=True):
+def load_image(data_path, valid_fold, train=True):
     if train:
-        image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i) for i in range(4)]
+        image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i) for i in range(4) if i != test_fold]
     else:
-        image_df_list = [pd.read_parquet(data_path + 'test_image_data_%1d.parquet' % i) for i in range(4)]
+        image_df_list = [pd.read_parquet(data_path + 'train_image_data_%1d.feather' % i) for i in range(4) if i == test_fold]
 
     HEIGHT = 137
     WIDTH = 236
