@@ -18,7 +18,7 @@ import torch.nn.functional as F
 parser = argparse.ArgumentParser(description='bengali')
 parser.add_argument('--train', default=True, help='train or test')
 parser.add_argument('--data-path', default="/kaggle/input/bengaliai-cv19/", help="path to training dataset")
-parser.add_argument('--test-fold', default=0, type=int, help="which fold for validation")
+parser.add_argument('--valid-fold', default=0, type=int, help="which fold for validation")
 parser.add_argument('--image-size', default=128, help="input image size for model")
 parser.add_argument('--epochs', default=300, type=int, help="epochs to train")
 parser.add_argument('--batch_size', default=64, type=int, help="batch size")
@@ -88,12 +88,12 @@ def main():
 
     print("Create Model Done")
     # create dataset
-    train_images = load_image(args.data_path, args.test_fold)
-    valid_images = load_image(args.data_path, args.test_fold, False)
+    train_images = load_image(args.data_path, args.valid_fold)
+    valid_images = load_image(args.data_path, args.valid_fold, False)
     df = pd.read_csv(args.data_path+'/train.csv')
     labels = df[['grapheme_root', 'vowel_diacritic', 'consonant_diacritic']].values
 
-    valid_indices = [i+50210*args.test_fold for i in range(50210)]
+    valid_indices = [i+50210*args.valid_fold for i in range(50210)]
     train_indices = [i for i in range(50210*4) if i not in valid_indices]
 
     train_labels = np.take(labels, train_indices, axis=0)
@@ -113,7 +113,7 @@ def main():
     valid_transform = Transform(
     size=(128, 128), threshold=5., sigma=-1.)  
     valid_dataset = BengaliAIDataset(valid_images, valid_labels,
-                                 transform=test_transform)
+                                 transform=valid_transform)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     print("DataLoader Done")
@@ -150,7 +150,7 @@ def main():
         # save model
         if valid_acc[0] > best_acc:
             torch.save(model.state_dict(), args.save_path+"bengali.pt")
-            best_acc = test_acc[0]
+            best_acc = valid_acc[0]
 
 
 if __name__ == "__main__":
