@@ -143,8 +143,8 @@ def main():
         print("epoch %d done" % (i))
 
         if args.verbal:
-            print("Train ACC: %f, %f, %f" % (*train_acc))
-            print("Valid ACC: %f, %f, %f" % (*valid_acc))
+            print("Train ACC: %f, %f, %f" % (train_acc[0], train_acc[1], train_acc[2]))
+            print("Valid ACC: %f, %f, %f" % (valid_acc[0], valid_acc[1], valid_acc[2]))
 
 
         # save model
