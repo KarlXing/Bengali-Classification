@@ -36,8 +36,8 @@ args = parser.parse_args()
 
 def dovalid(model, dataloader, device):
     model.eval()
-    all_labels = [torch.rand(0), torch.rand(0), torch.rand(0)]
-    all_preds = [torch.rand(0), torch.rand(0), torch.rand(0)]
+    all_labels = [torch.rand(0).type(torch.LongTensor), torch.rand(0).type(torch.LongTensor), torch.rand(0).type(torch.LongTensor)]
+    all_preds = [torch.rand(0).type(torch.int64), torch.rand(0).type(torch.int64), torch.rand(0).type(torch.int64)]
     scores = []
     acc = []
 
