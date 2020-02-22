@@ -56,7 +56,7 @@ def dovalid(model, dataloader, device):
             all_preds[i] = torch.cat((all_preds[i], preds[i].cpu()), dim=0)
 
     for i in range(3):
-        all_labels[i] = all_labels[i].numpy()
+        all_labels[i] = all_labels[i].type(torch.int64).numpy()
         all_preds[i] = all_preds[i].numpy()
         scores.append(sklearn.metrics.recall_score(
             all_labels[i], all_preds[i], average='macro'))
