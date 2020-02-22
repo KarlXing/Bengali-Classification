@@ -4,6 +4,7 @@ from utils import load_image, BengaliAIDataset, Transform
 from model import SENet, SEResNeXtBottleneck
 import argparse
 import random
+import sklearn
 
 
 import torch
@@ -26,29 +27,42 @@ parser.add_argument('--save-path', default="/pv/kaggle/bengali/", help="path to 
 parser.add_argument('--lr', default=0.001, type=float, help="learning rate")
 parser.add_argument('--optim', default='sgd', help="pytorch optimizer")
 parser.add_argument('--verbal', default=False, action='store_true')
+parser.add_argument('--num-workers', default=16, type=int, help='num of workers for dataloader')
+parser.add_argument('--load-model', default=False, action='store_true')
+parser.add_argument('--load-model-path', default="/pv/kaggle/bengali/bengali.pt", help='path to model to load')
 
 args = parser.parse_args()
 
 
 def dovalid(model, dataloader, device):
     model.eval()
-    num_data = 0
-    num_acc1, num_acc2, num_acc3 = 0, 0, 0
+    all_labels = [torch.rand(0), torch.rand(0), torch.rand(0)]
+    all_preds = [torch.rand(0), torch.rand(0), torch.rand(0)]
+    scores = []
+    acc = []
 
     for inputs, labels in dataloader:
-        inputs, labels = inputs.to(device), labels.to(device)
+        inputs = inputs.to(device)
         output = model(inputs)
         logit1, logit2, logit3 = output[:,: 168], output[:,168: 168+11], output[:,168+11:]
         pred1 = torch.max(logit1, axis=1).indices
         pred2 = torch.max(logit2, axis=1).indices
         pred3 = torch.max(logit3, axis=1).indices
-        acc1, acc2, acc3 = sum(pred1 == labels[:, 0]), sum(pred2 == labels[:, 1]), sum(pred3 == labels[:, 2])
-        num_acc1 += acc1.item()
-        num_acc2 += acc2.item()
-        num_acc3 += acc3.item()
-        num_data += inputs.shape[0]
+        
+        # save prediction and labels
+        preds = [pred1, pred2, pred3]
+        for i in range(3):
+            all_labels[i] = torch.cat((all_labels[i], labels[:, i]), dim=0)
+            all_preds[i] = torch.cat((all_preds[i], preds[i].cpu()), dim=0)
 
-    return [num_acc1/num_data, num_acc2/num_data, num_acc3/num_data]
+    for i in range(3):
+        all_labels[i] = all_labels[i].numpy()
+        all_preds[i] = all_preds[i].numpy()
+        scores.append(sklearn.metrics.recall_score(
+            all_labels[i], all_preds[i], average='macro'))
+        acc.append(sum(all_labels[i] == all_preds[i])/all_labels.shape[0])
+
+    return acc, scores
 
 
 
@@ -84,7 +98,10 @@ def main():
     model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
                   dropout_p=0.1, inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=186).to(device)
+                  num_classes=186)
+    if args.load_model:
+        model.load_state_dict(torch.load(args.load_model_path))
+    model = model.to(device)
 
     print("Create Model Done")
     # create dataset
@@ -102,19 +119,19 @@ def main():
 
     train_transform = Transform(
     size=(128, 128), threshold=5.,
-    sigma=-1., blur_ratio=0.5, noise_ratio=0.5, cutout_ratio=0.5,
+    sigma=-1., blur_ratio=0, noise_ratio=0.5, cutout_ratio=0.5,
     elastic_distortion_ratio=0.5, random_brightness_ratio=0.5,
     piece_affine_ratio=0.5, ssr_ratio=0.5)
     # transform = Transform(size=(image_size, image_size))
     train_dataset = BengaliAIDataset(train_images, train_labels,
                                  transform=train_transform)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     valid_transform = Transform(
     size=(128, 128), threshold=5., sigma=-1.)  
     valid_dataset = BengaliAIDataset(valid_images, valid_labels,
                                  transform=valid_transform)
-    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     print("DataLoader Done")
     # train code
@@ -134,17 +151,22 @@ def main():
             train_loss = dotrain(model, optimizer, criterion, inputs, labels)
             writer.add_scalars('train loss', {'loss1':train_loss[0], 'loss2': train_loss[1], 'loss3': train_loss[2]}, i)
 
-        train_acc = dovalid(model, train_loader, device)
+        train_acc, train_scores = dovalid(model, train_loader, device)
         writer.add_scalars('train acc', {'acc1':train_acc[0], 'acc2': train_acc[1], 'acc3': train_acc[2]}, i)
+        writer.add_scalars('train score', {'score1':train_scores[0], 'score2': train_scores[1], 'score3': train_scores[2]}, i)
 
-        valid_acc = dovalid(model, valid_loader, device)
+        valid_acc, valid_scores = dovalid(model, valid_loader, device)
         writer.add_scalars('valid acc', {'acc1':valid_acc[0], 'acc2': valid_acc[1], 'acc3': valid_acc[2]}, i)
+        writer.add_scalars('valid score', {'score1':valid_scores[0], 'score2': valid_scores[1], 'score3': valid_scores[2]}, i)
+
 
         print("epoch %d done" % (i))
 
         if args.verbal:
             print("Train ACC: %f, %f, %f" % (train_acc[0], train_acc[1], train_acc[2]))
+            print("Train Scores: %f, %f, %f" % (train_scores[0], train_scores[1], train_scores[2]))
             print("Valid ACC: %f, %f, %f" % (valid_acc[0], valid_acc[1], valid_acc[2]))
+            print("Valid Scores: %f, %f, %f" % (valid_scores[0], valid_scores[1], valid_scores[2]))
 
 
         # save model
