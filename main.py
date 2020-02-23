@@ -59,7 +59,7 @@ def dovalid(model, dataloader, device):
         all_preds[i] = all_preds[i].numpy()
         scores.append(sklearn.metrics.recall_score(
             all_labels[i], all_preds[i], average='macro'))
-        acc.append(sum(all_labels[i] == all_preds[i])/all_labels.shape[0])
+        acc.append(sum(all_labels[i] == all_preds[i])/all_labels[i].shape[0])
 
     return acc, scores
 
