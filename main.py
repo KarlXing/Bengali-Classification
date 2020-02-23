@@ -21,7 +21,7 @@ parser.add_argument('--data-path', default="/kaggle/input/bengaliai-cv19/", help
 parser.add_argument('--valid-fold', default=0, type=int, help="which fold for validation")
 parser.add_argument('--image-size', default=128, help="input image size for model")
 parser.add_argument('--epochs', default=300, type=int, help="epochs to train")
-parser.add_argument('--batch_size', default=64, type=int, help="batch size")
+parser.add_argument('--batch-size', default=128, type=int, help="batch size")
 parser.add_argument('--save-path', default="/pv/kaggle/bengali/", help="path to save model")
 parser.add_argument('--lr', default=0.001, type=float, help="learning rate")
 parser.add_argument('--optim', default='sgd', help="pytorch optimizer")
@@ -95,7 +95,7 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16).to(device)
     model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
-                  dropout_p=0.1, inplanes=64, input_3x3=False,
+                  dropout_p=0.2, inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0)
     if args.load_model:
         model.load_state_dict(torch.load(args.load_model_path))
@@ -117,7 +117,7 @@ def main():
 
     train_transform = Transform(
     size=(128, 128), threshold=5.,
-    sigma=-1., blur_ratio=0, noise_ratio=0.5, cutout_ratio=0.5,
+    sigma=-1., blur_ratio=0.5, noise_ratio=0.5, cutout_ratio=0.5,
     elastic_distortion_ratio=0.5, random_brightness_ratio=0.5,
     piece_affine_ratio=0.5, ssr_ratio=0.5)
     # transform = Transform(size=(image_size, image_size))
@@ -141,7 +141,7 @@ def main():
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     writer = SummaryWriter()
-    best_acc = 0
+    best_score = 0
 
     for i in range(args.epochs):
         for inputs, labels in train_loader:
@@ -157,20 +157,20 @@ def main():
         writer.add_scalars('valid acc', {'acc1':valid_acc[0], 'acc2': valid_acc[1], 'acc3': valid_acc[2]}, i)
         writer.add_scalars('valid score', {'score1':valid_scores[0], 'score2': valid_scores[1], 'score3': valid_scores[2]}, i)
 
-
         print("epoch %d done" % (i))
+
+        # save model
+        score = (valid_scores[0]*2+valid_scores[1]+valid_scores[2])/4
+        if score > best_score:
+            torch.save(model.state_dict(), args.save_path+"bengali.pt")
+            best_score = score
 
         if args.verbal:
             print("Train ACC: %f, %f, %f" % (train_acc[0], train_acc[1], train_acc[2]))
             print("Train Scores: %f, %f, %f" % (train_scores[0], train_scores[1], train_scores[2]))
             print("Valid ACC: %f, %f, %f" % (valid_acc[0], valid_acc[1], valid_acc[2]))
             print("Valid Scores: %f, %f, %f" % (valid_scores[0], valid_scores[1], valid_scores[2]))
-
-
-        # save model
-        if valid_acc[0] > best_acc:
-            torch.save(model.state_dict(), args.save_path+"bengali.pt")
-            best_acc = valid_acc[0]
+            print("Best Score: ", best_score)
 
 
 if __name__ == "__main__":

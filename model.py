@@ -247,9 +247,21 @@ class SENet(nn.Module):
         self.attention_c2 = LinearAttentionBlock(1024)
         self.attention_c3 = LinearAttentionBlock(2048)
 
-        self.last_linear_g = nn.Linear(512+1024+2048, num_classes1)
-        self.last_linear_v = nn.Linear(512+1024+2048, num_classes2)
-        self.last_linear_c = nn.Linear(512+1024+2048, num_classes3)
+        self.last_linear_g = nn.Linear(512+1024+2048, 512)
+        self.last_linear_v = nn.Linear(512+1024+2048, 512)
+        self.last_linear_c = nn.Linear(512+1024+2048, 512)
+
+        self.output_linear_g = nn.Linear(512, num_classes1)
+        self.output_linear_v = nn.Linear(512, num_classes2)
+        self.output_linear_c = nn.Linear(512, num_classes3)
+
+
+        # add dropout
+        sefl.dropout1 = nn.Dropout(dropout_p)
+        sefl.dropout2 = nn.Dropout(dropout_p)
+        sefl.dropout3 = nn.Dropout(dropout_p)
+        sefl.dropout4 = nn.Dropout(dropout_p)
+        sefl.dropout5 = nn.Dropout(dropout_p)
 
 
     def _make_layer(self, block, planes, blocks, groups, reduction, stride=1,
@@ -274,10 +286,16 @@ class SENet(nn.Module):
 
     def features(self, x):
         x1 = self.layer0(x)
+        x1 = self.dropout1(x1)
         x2 = self.layer1(x1)
+        x2 = self.dropout2(x2)
         x3 = self.layer2(x2)
+        x3 = self.dropout3(x3)
         x4 = self.layer3(x3)
+        x4 = self.dropout4(x4)
         x5 = self.layer4(x4)
+        x5 = self.dropout5(x5)
+
         return x3, x4, x5
 
     # def logits(self, x):
@@ -294,30 +312,27 @@ class SENet(nn.Module):
         _, g_g2 = self.attention_g2(x4)
         _, g_g3 = self.attention_g3(x5)
         g_g = torch.cat((g_g1,g_g2,g_g3), dim=1)
-        logit1 = self.last_linear_g(g_g)
+        logit1 = F.relu(self.last_linear_g(g_g))
+        logit1 = self.output_linear_g(logit1)
 
 
         _, g_v1 = self.attention_v1(x3)
         _, g_v2 = self.attention_v2(x4)
         _, g_v3 = self.attention_v3(x5)
         g_v = torch.cat((g_v1,g_v2,g_v3), dim=1)
-        logit2 = self.last_linear_v(g_v)
+        logit2 = F.relu(self.last_linear_v(g_v))
+        logit2 = self.output_linear_v(logit2)
 
         _, g_c1 = self.attention_c1(x3)
         _, g_c2 = self.attention_c2(x4)
         _, g_c3 = self.attention_c3(x5)
         g_c = torch.cat((g_c1,g_c2,g_c3), dim=1)
-        logit3 = self.last_linear_c(g_c)
+        logit3 = F.relu(self.last_linear_c(g_c))
+        logit3 = self.output_linear_c(logit3)
 
 
         return torch.cat((logit1, logit2, logit3), dim=1)
 
-def se_resnext50_32x4d(num_classes=1000, pretrained='imagenet'):
-    model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
-                  dropout_p=0.1, inplanes=64, input_3x3=False,
-                  downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes)
-    return model
 
 
 
