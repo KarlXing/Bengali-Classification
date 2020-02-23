@@ -4,8 +4,7 @@ from utils import load_image, BengaliAIDataset, Transform
 from model import SENet, SEResNeXtBottleneck
 import argparse
 import random
-import sklearn
-
+import sklearn.metrics
 
 import torch
 from torch.utils.data import DataLoader
