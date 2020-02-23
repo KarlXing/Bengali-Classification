@@ -257,11 +257,11 @@ class SENet(nn.Module):
 
 
         # add dropout
-        sefl.dropout1 = nn.Dropout(dropout_p)
-        sefl.dropout2 = nn.Dropout(dropout_p)
-        sefl.dropout3 = nn.Dropout(dropout_p)
-        sefl.dropout4 = nn.Dropout(dropout_p)
-        sefl.dropout5 = nn.Dropout(dropout_p)
+        self.dropout1 = nn.Dropout(dropout_p)
+        self.dropout2 = nn.Dropout(dropout_p)
+        self.dropout3 = nn.Dropout(dropout_p)
+        self.dropout4 = nn.Dropout(dropout_p)
+        self.dropout5 = nn.Dropout(dropout_p)
 
 
     def _make_layer(self, block, planes, blocks, groups, reduction, stride=1,
