@@ -96,8 +96,7 @@ def main():
     # model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16).to(device)
     model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
                   dropout_p=0.1, inplanes=64, input_3x3=False,
-                  downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=186)
+                  downsample_kernel_size=1, downsample_padding=0)
     if args.load_model:
         model.load_state_dict(torch.load(args.load_model_path))
     model = model.to(device)
