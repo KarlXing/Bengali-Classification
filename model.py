@@ -290,24 +290,24 @@ class SENet(nn.Module):
 
     def forward(self, x):
         x3, x4, x5 = self.features(x)
-        g_g1 = self.attention_g1(x3)
-        g_g2 = self.attention_g2(x4)
-        g_g3 = self.attention_g3(x5)
+        _, g_g1 = self.attention_g1(x3)
+        _, g_g2 = self.attention_g2(x4)
+        _, g_g3 = self.attention_g3(x5)
         g_g = torch.cat((g_g1,g_g2,g_g3), dim=1)
         logit1 = self.last_linear_g(g_g)
 
 
-        g_v1 = self.attention_v1(x3)
-        g_v2 = self.attention_v2(x4)
-        g_v3 = self.attention_v3(x5)
+        _, g_v1 = self.attention_v1(x3)
+        _, g_v2 = self.attention_v2(x4)
+        _, g_v3 = self.attention_v3(x5)
         g_v = torch.cat((g_v1,g_v2,g_v3), dim=1)
-        logit2 = self.last_linear_g(g_v)
+        logit2 = self.last_linear_v(g_v)
 
-        g_c1 = self.attention_c1(x3)
-        g_c2 = self.attention_c2(x4)
-        g_c3 = self.attention_c3(x5)
+        _, g_c1 = self.attention_c1(x3)
+        _, g_c2 = self.attention_c2(x4)
+        _, g_c3 = self.attention_c3(x5)
         g_c = torch.cat((g_c1,g_c2,g_c3), dim=1)
-        logit3 = self.last_linear_g(g_c)
+        logit3 = self.last_linear_c(g_c)
 
 
         return torch.cat((logit1, logit2, logit3), dim=1)
