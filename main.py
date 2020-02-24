@@ -35,7 +35,7 @@ parser.add_argument('--valid-shuffle', default=True, help='which way to do valid
 args = parser.parse_args()
 
 
-def dovalid(model, dataloader, device):
+def dovalid(model, dataloader, device, criterion):
     model.eval()
     all_labels = [torch.rand(0).type(torch.LongTensor), torch.rand(0).type(torch.LongTensor), torch.rand(0).type(torch.LongTensor)]
     all_preds = [torch.rand(0).type(torch.int64), torch.rand(0).type(torch.int64), torch.rand(0).type(torch.int64)]
@@ -180,12 +180,12 @@ def main():
             train_loss = dotrain(model, optimizer, criterion, inputs, labels)
             writer.add_scalars('train loss', {'loss1':train_loss[0], 'loss2': train_loss[1], 'loss3': train_loss[2]}, i)
 
-        train_acc, train_scores, train_loss = dovalid(model, train_loader, device)
+        train_acc, train_scores, train_loss = dovalid(model, train_loader, device, criterion)
         writer.add_scalars('train acc', {'acc1':train_acc[0], 'acc2': train_acc[1], 'acc3': train_acc[2]}, i)
         writer.add_scalars('train score', {'score1':train_scores[0], 'score2': train_scores[1], 'score3': train_scores[2]}, i)
         writer.add_scalars('train loss', {'loss1':train_loss[0], 'loss2': train_loss[1], 'loss3': train_loss[2]}, i)
 
-        valid_acc, valid_scores, valid_loss = dovalid(model, valid_loader, device)
+        valid_acc, valid_scores, valid_loss = dovalid(model, valid_loader, device, criterion)
         writer.add_scalars('valid acc', {'acc1':valid_acc[0], 'acc2': valid_acc[1], 'acc3': valid_acc[2]}, i)
         writer.add_scalars('valid score', {'score1':valid_scores[0], 'score2': valid_scores[1], 'score3': valid_scores[2]}, i)
         writer.add_scalars('valid loss', {'loss1':valid_loss[0], 'loss2': valid_loss[1], 'loss3': valid_loss[2]}, i)
