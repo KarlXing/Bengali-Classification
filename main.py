@@ -12,7 +12,6 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
-import torch.optim.lr_scheduler.ReduceLROnPlateau as ReduceLROnPlateau
 
 
 
@@ -170,7 +169,7 @@ def main():
     else:
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.25, patience=10, min_lr=1e-07)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.25, patience=10, min_lr=1e-07)
 
     writer = SummaryWriter()
     best_score = 0
