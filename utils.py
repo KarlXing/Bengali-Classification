@@ -23,6 +23,17 @@ from collections import OrderedDict
 import math
 
 
+def load_image_shuffle(data_path):
+    image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i) for i in range(4)]
+    HEIGHT = 137
+    WIDTH = 236
+    images = [df.iloc[:, 1:].values.reshape(-1, HEIGHT, WIDTH) for df in image_df_list]
+    del image_df_list
+    gc.collect()
+    images = np.concatenate(images, axis=0)
+    return images
+
+
 def load_image(data_path, valid_fold, train=True):
     if train:
         image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i) for i in range(4) if i != valid_fold]

@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from utils import load_image, BengaliAIDataset, Transform
+from utils import load_image, BengaliAIDataset, Transform, load_image_shuffle
 from model import SENet, SEResNeXtBottleneck
 import argparse
 import random
@@ -12,6 +12,7 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
+import torch.optim.lr_scheduler.ReduceLROnPlateau as ReduceLROnPlateau
 
 
 
@@ -29,6 +30,8 @@ parser.add_argument('--verbal', default=False, action='store_true')
 parser.add_argument('--num-workers', default=16, type=int, help='num of workers for dataloader')
 parser.add_argument('--load-model', default=False, action='store_true')
 parser.add_argument('--load-model-path', default="/pv/kaggle/bengali/bengali.pt", help='path to model to load')
+parser.add_argument('--valid-ratio', default=0.1, type=float, help='how much data is used for validation')
+parser.add_argument('--valid-shuffle', default=True, help='which way to do validation')
 
 args = parser.parse_args()
 
@@ -39,20 +42,33 @@ def dovalid(model, dataloader, device):
     all_preds = [torch.rand(0).type(torch.int64), torch.rand(0).type(torch.int64), torch.rand(0).type(torch.int64)]
     scores = []
     acc = []
+    all_loss = [0, 0, 0]
+    all_count = 0
+
 
     for inputs, labels in dataloader:
-        inputs = inputs.to(device)
+        inputs, labels = inputs.to(device), labels.to(device)
         output = model(inputs)
         logit1, logit2, logit3 = output[:,: 168], output[:,168: 168+11], output[:,168+11:]
         pred1 = torch.max(logit1, axis=1).indices
         pred2 = torch.max(logit2, axis=1).indices
         pred3 = torch.max(logit3, axis=1).indices
-        
+
+        loss1 = criterion(logit1, labels[:, 0])
+        loss2 = criterion(logit2, labels[:, 1])
+        loss3 = criterion(logit3, labels[:, 2])
+
         # save prediction and labels
         preds = [pred1, pred2, pred3]
+
         for i in range(3):
             all_labels[i] = torch.cat((all_labels[i], labels[:, i]), dim=0)
             all_preds[i] = torch.cat((all_preds[i], preds[i].cpu()), dim=0)
+
+        all_count += inputs.shape[0]
+        loss = [torch.sum(loss1).item(), torch.sum(loss2).item(), torch.sum(loss3).item()]
+        for i in range(3):
+            all_loss[i] += loss[i]
 
     for i in range(3):
         all_labels[i] = all_labels[i].type(torch.int64).numpy()
@@ -60,8 +76,9 @@ def dovalid(model, dataloader, device):
         scores.append(sklearn.metrics.recall_score(
             all_labels[i], all_preds[i], average='macro'))
         acc.append(sum(all_labels[i] == all_preds[i])/all_labels[0].shape[0])
+        all_loss[i] = all_loss[i]/all_count
 
-    return acc, scores
+    return acc, scores, all_loss
 
 
 
@@ -88,7 +105,6 @@ def dotrain(model, optimizer, criterion, inputs, labels):
     return [loss1.item(), loss2.item(), loss3.item()]
 
 
-
 def main():
 
     # create model
@@ -103,16 +119,30 @@ def main():
 
     print("Create Model Done")
     # create dataset
-    train_images = load_image(args.data_path, args.valid_fold)
-    valid_images = load_image(args.data_path, args.valid_fold, False)
-    df = pd.read_csv(args.data_path+'/train.csv')
-    labels = df[['grapheme_root', 'vowel_diacritic', 'consonant_diacritic']].values
+    if not args.valid_shuffle:
+        train_images = load_image(args.data_path, args.valid_fold)
+        valid_images = load_image(args.data_path, args.valid_fold, False)
+        df = pd.read_csv(args.data_path+'/train.csv')
+        labels = df[['grapheme_root', 'vowel_diacritic', 'consonant_diacritic']].values
 
-    valid_indices = [i+50210*args.valid_fold for i in range(50210)]
-    train_indices = [i for i in range(50210*4) if i not in valid_indices]
+        valid_indices = [i+50210*args.valid_fold for i in range(50210)]
+        train_indices = [i for i in range(50210*4) if i not in valid_indices]
 
-    train_labels = np.take(labels, train_indices, axis=0)
-    valid_labels = np.take(labels, valid_indices, axis=0)
+        train_labels = np.take(labels, train_indices, axis=0)
+        valid_labels = np.take(labels, valid_indices, axis=0)
+    else:
+        images = load_image_shuffle(args.data_path)
+        train_pd = pd.read_csv(args.data_path+'/train.csv')
+        labels = train_pd[['grapheme_root', 'vowel_diacritic', 'consonant_diacritic']].values
+
+        num_train = int(images.shape[0]*(1-args.valid_ratio))
+        train_indices = random.sample(set(range(images.shape[0])), num_train)
+        valid_indices = [i for i in range(images.shape[0]) if i not in train_indices]
+
+        train_images = np.take(images, train_indices, axis=0)
+        valid_images = np.take(images, valid_indices, axis=0)
+        train_labels = np.take(labels, train_indices, axis=0)
+        valid_labels = np.take(labels, valid_indices, axis=0)
 
 
     train_transform = Transform(
@@ -140,6 +170,8 @@ def main():
     else:
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
+    scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.25, patience=10, min_lr=1e-07)
+
     writer = SummaryWriter()
     best_score = 0
 
@@ -149,13 +181,16 @@ def main():
             train_loss = dotrain(model, optimizer, criterion, inputs, labels)
             writer.add_scalars('train loss', {'loss1':train_loss[0], 'loss2': train_loss[1], 'loss3': train_loss[2]}, i)
 
-        train_acc, train_scores = dovalid(model, train_loader, device)
+        train_acc, train_scores, train_loss = dovalid(model, train_loader, device)
         writer.add_scalars('train acc', {'acc1':train_acc[0], 'acc2': train_acc[1], 'acc3': train_acc[2]}, i)
         writer.add_scalars('train score', {'score1':train_scores[0], 'score2': train_scores[1], 'score3': train_scores[2]}, i)
+        writer.add_scalars('train loss', {'loss1':train_loss[0], 'loss2': train_loss[1], 'loss3': train_loss[2]}, i)
 
-        valid_acc, valid_scores = dovalid(model, valid_loader, device)
+        valid_acc, valid_scores, valid_loss = dovalid(model, valid_loader, device)
         writer.add_scalars('valid acc', {'acc1':valid_acc[0], 'acc2': valid_acc[1], 'acc3': valid_acc[2]}, i)
         writer.add_scalars('valid score', {'score1':valid_scores[0], 'score2': valid_scores[1], 'score3': valid_scores[2]}, i)
+        writer.add_scalars('valid loss', {'loss1':valid_loss[0], 'loss2': valid_loss[1], 'loss3': valid_loss[2]}, i)
+
 
         print("epoch %d done" % (i))
 
@@ -168,10 +203,13 @@ def main():
         if args.verbal:
             print("Train ACC: %f, %f, %f" % (train_acc[0], train_acc[1], train_acc[2]))
             print("Train Scores: %f, %f, %f" % (train_scores[0], train_scores[1], train_scores[2]))
+            print("Train Loss: %f, %f, %f" % (train_loss[0], train_loss[1], train_loss[2]))
             print("Valid ACC: %f, %f, %f" % (valid_acc[0], valid_acc[1], valid_acc[2]))
             print("Valid Scores: %f, %f, %f" % (valid_scores[0], valid_scores[1], valid_scores[2]))
+            print("Valid Loss: %f, %f, %f" % (valid_loss[0], valid_loss[1], valid_loss[2]))
             print("Best Score: ", best_score)
 
+        scheduler.step(valid_loss[0]*0.5+valid_loss[1]*0.25+valid_loss[2]*0.25)
 
 if __name__ == "__main__":
     main()
