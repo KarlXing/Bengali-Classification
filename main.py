@@ -61,7 +61,7 @@ def dovalid(model, dataloader, device, criterion):
         preds = [pred1, pred2, pred3]
 
         for i in range(3):
-            all_labels[i] = torch.cat((all_labels[i], labels[:, i]), dim=0)
+            all_labels[i] = torch.cat((all_labels[i], labels.cpu()[:, i]), dim=0)
             all_preds[i] = torch.cat((all_preds[i], preds[i].cpu()), dim=0)
 
         all_count += inputs.shape[0]
