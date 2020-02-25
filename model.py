@@ -160,12 +160,12 @@ class SEResNeXtBottleneck(Bottleneck):
         self.stride = stride
 
 
-class SENet(nn.Module):
+class SEAttentionNet(nn.Module):
 
     def __init__(self, block, layers, groups, reduction, dropout_p=0.2,
                  inplanes=128, input_3x3=True, downsample_kernel_size=3,
-                 downsample_padding=1, num_classes1=168, num_classes2=11, num_classes3=7):        
-        super(SENet, self).__init__()
+                 downsample_padding=1, num_classes1=168, num_classes2=11, num_classes3=7):
+        super(SEAttentionNet, self).__init__()
         self.inplanes = inplanes
         if input_3x3:
             layer0_modules = [
@@ -334,6 +334,123 @@ class SENet(nn.Module):
         return torch.cat((logit1, logit2, logit3), dim=1)
 
 
+class SENet(nn.Module):
 
+    def __init__(self, block, layers, groups, reduction, dropout_p=0.2,
+                 inplanes=128, input_3x3=True, downsample_kernel_size=3,
+                 downsample_padding=1, num_classes=186):
+        super(SENet, self).__init__()
+        self.inplanes = inplanes
+        if input_3x3:
+            layer0_modules = [
+                ('conv1', nn.Conv2d(1, 64, 3, stride=2, padding=1,
+                                    bias=False)),
+                ('bn1', nn.BatchNorm2d(64)),
+                ('relu1', nn.ReLU(inplace=True)),
+                ('conv2', nn.Conv2d(64, 64, 3, stride=1, padding=1,
+                                    bias=False)),
+                ('bn2', nn.BatchNorm2d(64)),
+                ('relu2', nn.ReLU(inplace=True)),
+                ('conv3', nn.Conv2d(64, inplanes, 3, stride=1, padding=1,
+                                    bias=False)),
+                ('bn3', nn.BatchNorm2d(inplanes)),
+                ('relu3', nn.ReLU(inplace=True)),
+            ]
+        else:
+            layer0_modules = [
+                ('conv1', nn.Conv2d(1, inplanes, kernel_size=7, stride=2,
+                                    padding=3, bias=False)),
+                ('bn1', nn.BatchNorm2d(inplanes)),
+                ('relu1', nn.ReLU(inplace=True)),
+            ]
+        # To preserve compatibility with Caffe weights `ceil_mode=True`
+        # is used instead of `padding=1`.
+        layer0_modules.append(('pool', nn.MaxPool2d(3, stride=2,
+                                                    ceil_mode=True)))
+        self.layer0 = nn.Sequential(OrderedDict(layer0_modules))
+        self.layer1 = self._make_layer(
+            block,
+            planes=64,
+            blocks=layers[0],
+            groups=groups,
+            reduction=reduction,
+            downsample_kernel_size=1,
+            downsample_padding=0
+        )
+        self.layer2 = self._make_layer(
+            block,
+            planes=128,
+            blocks=layers[1],
+            stride=2,
+            groups=groups,
+            reduction=reduction,
+            downsample_kernel_size=downsample_kernel_size,
+            downsample_padding=downsample_padding
+        )
+        self.layer3 = self._make_layer(
+            block,
+            planes=256,
+            blocks=layers[2],
+            stride=2,
+            groups=groups,
+            reduction=reduction,
+            downsample_kernel_size=downsample_kernel_size,
+            downsample_padding=downsample_padding
+        )
+        self.layer4 = self._make_layer(
+            block,
+            planes=512,
+            blocks=layers[3],
+            stride=2,
+            groups=groups,
+            reduction=reduction,
+            downsample_kernel_size=downsample_kernel_size,
+            downsample_padding=downsample_padding
+        )
+        self.avg_pool = nn.AvgPool2d(1, stride=1)
+        self.dropout = nn.Dropout(dropout_p) if dropout_p is not None else None
+        self.last_linear = nn.Linear(32768, num_classes)
+        
+
+    def _make_layer(self, block, planes, blocks, groups, reduction, stride=1,
+                    downsample_kernel_size=1, downsample_padding=0):
+        downsample = None
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, planes * block.expansion,
+                          kernel_size=downsample_kernel_size, stride=stride,
+                          padding=downsample_padding, bias=False),
+                nn.BatchNorm2d(planes * block.expansion),
+            )
+
+        layers = []
+        layers.append(block(self.inplanes, planes, groups, reduction, stride,
+                            downsample))
+        self.inplanes = planes * block.expansion
+        for i in range(1, blocks):
+            layers.append(block(self.inplanes, planes, groups, reduction))
+
+        return nn.Sequential(*layers)
+
+    def features(self, x):
+        x = self.layer0(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        return x
+
+    def logits(self, x):
+        x = self.avg_pool(x)
+        if self.dropout is not None:
+            x = self.dropout(x)
+        x = x.view(x.size(0), -1)
+        x = self.last_linear(x)
+        return x
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.logits(x)
+        return x
 
 
