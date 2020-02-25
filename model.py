@@ -10,6 +10,33 @@ from collections import OrderedDict
 import math
 
 
+# class ProjectorBlock(nn.Module):
+#     def __init__(self, in_features, out_features):
+#         super(ProjectorBlock, self).__init__()
+#         self.op = nn.Conv2d(in_channels=in_features, out_channels=out_features, kernel_size=1, padding=0, bias=False)
+#     def forward(self, inputs):
+#         return self.op(inputs)
+
+
+class LinearAttentionBlock(nn.Module):
+    def __init__(self, in_features, normalize_attn=True):
+        super(LinearAttentionBlock, self).__init__()
+        self.normalize_attn = normalize_attn
+        self.op = nn.Conv2d(in_channels=in_features, out_channels=1, kernel_size=1, padding=0, bias=False)
+    def forward(self, l):
+        N, C, W, H = l.size()
+        c = self.op(l) # batch_sizex1xWxH
+        if self.normalize_attn:
+            a = F.softmax(c.view(N,1,-1), dim=2).view(N,1,W,H)
+        else:
+            a = torch.sigmoid(c)
+        g = torch.mul(a.expand_as(l), l)
+        if self.normalize_attn:
+            g = g.view(N,C,-1).sum(dim=2) # batch_sizexC
+        else:
+            g = F.adaptive_avg_pool2d(g, (1,1)).view(N,C)
+        return c.view(N,1,W,H), g
+
 
 class SEModule(nn.Module):
 
@@ -137,7 +164,7 @@ class SENet(nn.Module):
 
     def __init__(self, block, layers, groups, reduction, dropout_p=0.2,
                  inplanes=128, input_3x3=True, downsample_kernel_size=3,
-                 downsample_padding=1, num_classes=1000):        
+                 downsample_padding=1, num_classes1=168, num_classes2=11, num_classes3=7):        
         super(SENet, self).__init__()
         self.inplanes = inplanes
         if input_3x3:
@@ -206,10 +233,36 @@ class SENet(nn.Module):
             downsample_kernel_size=downsample_kernel_size,
             downsample_padding=downsample_padding
         )
-        self.avg_pool = nn.AvgPool2d(1, stride=1)
-        self.dropout = nn.Dropout(dropout_p) if dropout_p is not None else None
-        self.last_linear = nn.Linear(32768, num_classes)
-        
+        # self.avg_pool = nn.AvgPool2d(1, stride=1)
+        # self.dropout = nn.Dropout(dropout_p) if dropout_p is not None else None
+        self.attention_g1 = LinearAttentionBlock(512)
+        self.attention_g2 = LinearAttentionBlock(1024)
+        self.attention_g3 = LinearAttentionBlock(2048)
+
+        self.attention_v1 = LinearAttentionBlock(512)
+        self.attention_v2 = LinearAttentionBlock(1024)
+        self.attention_v3 = LinearAttentionBlock(2048)
+
+        self.attention_c1 = LinearAttentionBlock(512)
+        self.attention_c2 = LinearAttentionBlock(1024)
+        self.attention_c3 = LinearAttentionBlock(2048)
+
+        self.last_linear_g = nn.Linear(512+1024+2048, 512)
+        self.last_linear_v = nn.Linear(512+1024+2048, 512)
+        self.last_linear_c = nn.Linear(512+1024+2048, 512)
+
+        self.output_linear_g = nn.Linear(512, num_classes1)
+        self.output_linear_v = nn.Linear(512, num_classes2)
+        self.output_linear_c = nn.Linear(512, num_classes3)
+
+
+        # add dropout
+        self.dropout1 = nn.Dropout(dropout_p)
+        self.dropout2 = nn.Dropout(dropout_p)
+        self.dropout3 = nn.Dropout(dropout_p)
+        self.dropout4 = nn.Dropout(dropout_p)
+        self.dropout5 = nn.Dropout(dropout_p)
+
 
     def _make_layer(self, block, planes, blocks, groups, reduction, stride=1,
                     downsample_kernel_size=1, downsample_padding=0):
@@ -232,32 +285,54 @@ class SENet(nn.Module):
         return nn.Sequential(*layers)
 
     def features(self, x):
-        x = self.layer0(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        return x
+        x1 = self.layer0(x)
+        x1 = self.dropout1(x1)
+        x2 = self.layer1(x1)
+        x2 = self.dropout2(x2)
+        x3 = self.layer2(x2)
+        x3 = self.dropout3(x3)
+        x4 = self.layer3(x3)
+        x4 = self.dropout4(x4)
+        x5 = self.layer4(x4)
+        x5 = self.dropout5(x5)
 
-    def logits(self, x):
-        x = self.avg_pool(x)
-        if self.dropout is not None:
-            x = self.dropout(x)
-        x = x.view(x.size(0), -1)
-        x = self.last_linear(x)
-        return x
+        return x3, x4, x5
+
+    # def logits(self, x):
+    #     x = self.avg_pool(x)
+    #     if self.dropout is not None:
+    #         x = self.dropout(x)
+    #     x = x.view(x.size(0), -1)
+    #     x = self.last_linear(x)
+    #     return x
 
     def forward(self, x):
-        x = self.features(x)
-        x = self.logits(x)
-        return x
+        x3, x4, x5 = self.features(x)
+        _, g_g1 = self.attention_g1(x3)
+        _, g_g2 = self.attention_g2(x4)
+        _, g_g3 = self.attention_g3(x5)
+        g_g = torch.cat((g_g1,g_g2,g_g3), dim=1)
+        logit1 = F.relu(self.last_linear_g(g_g))
+        logit1 = self.output_linear_g(logit1)
 
-def se_resnext50_32x4d(num_classes=1000, pretrained='imagenet'):
-    model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
-                  dropout_p=0.1, inplanes=64, input_3x3=False,
-                  downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes)
-    return model
+
+        _, g_v1 = self.attention_v1(x3)
+        _, g_v2 = self.attention_v2(x4)
+        _, g_v3 = self.attention_v3(x5)
+        g_v = torch.cat((g_v1,g_v2,g_v3), dim=1)
+        logit2 = F.relu(self.last_linear_v(g_v))
+        logit2 = self.output_linear_v(logit2)
+
+        _, g_c1 = self.attention_c1(x3)
+        _, g_c2 = self.attention_c2(x4)
+        _, g_c3 = self.attention_c3(x5)
+        g_c = torch.cat((g_c1,g_c2,g_c3), dim=1)
+        logit3 = F.relu(self.last_linear_c(g_c))
+        logit3 = self.output_linear_c(logit3)
+
+
+        return torch.cat((logit1, logit2, logit3), dim=1)
+
 
 
 
