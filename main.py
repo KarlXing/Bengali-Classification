@@ -56,7 +56,8 @@ def dovalid(model, dataloader, device, criterion):
 
     for inputs, labels in dataloader:
         inputs, labels = inputs.to(device), labels.to(device)
-        output = model(inputs)
+        with torch.no_grad():
+            output = model(inputs)
         logit1, logit2, logit3 = output[:,: 168], output[:,168: 168+11], output[:,168+11:]
         pred1 = torch.max(logit1, axis=1).indices
         pred2 = torch.max(logit2, axis=1).indices
