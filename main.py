@@ -135,8 +135,8 @@ def main():
     print("Create Model Done")
     # create dataset
     if not args.valid_shuffle:
-        train_images = load_image(args.data_path, args.valid_fold, nthreads=args.num_workers)
-        valid_images = load_image(args.data_path, args.valid_fold, False, nthreads=args.num_workers, )
+        train_images = load_image(args.data_path, args.valid_fold)
+        valid_images = load_image(args.data_path, args.valid_fold, False)
         df = pd.read_csv(args.data_path+'/train.csv')
         labels = df[['grapheme_root', 'vowel_diacritic', 'consonant_diacritic']].values
 
@@ -146,7 +146,7 @@ def main():
         train_labels = np.take(labels, train_indices, axis=0)
         valid_labels = np.take(labels, valid_indices, axis=0)
     else:
-        images = load_image_shuffle(args.data_path, nthreads=args.num_workers)
+        images = load_image_shuffle(args.data_path)
         train_pd = pd.read_csv(args.data_path+'/train.csv')
         labels = train_pd[['grapheme_root', 'vowel_diacritic', 'consonant_diacritic']].values
 

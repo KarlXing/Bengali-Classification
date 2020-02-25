@@ -23,8 +23,8 @@ from collections import OrderedDict
 import math
 
 
-def load_image_shuffle(data_path, nthreads = 1):
-    image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i, nthreads = nthreads, use_threads=True) for i in range(4)]
+def load_image_shuffle(data_path):
+    image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i) for i in range(4)]
     HEIGHT = 137
     WIDTH = 236
     images = [df.iloc[:, 1:].values.reshape(-1, HEIGHT, WIDTH) for df in image_df_list]
@@ -34,11 +34,11 @@ def load_image_shuffle(data_path, nthreads = 1):
     return images
 
 
-def load_image(data_path, valid_fold, train=True, nthreads=1):
+def load_image(data_path, valid_fold, train=True):
     if train:
-        image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i, nthreads = nthreads, use_threads=True) for i in range(4) if i != valid_fold]
+        image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i) for i in range(4) if i != valid_fold]
     else:
-        image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i, nthreads = nthreads, use_threads=True) for i in range(4) if i == valid_fold]
+        image_df_list = [pd.read_feather(data_path + 'train_image_data_%1d.feather' % i) for i in range(4) if i == valid_fold]
 
     HEIGHT = 137
     WIDTH = 236
