@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from utils import load_image, BengaliAIDataset, Transform, load_image_shuffle
-from model import SENet, SEResNeXtBottleneck, SEAttentionNet
+from model import SENet, SEResNeXtBottleneck, SEAttentionNet, SENetHeavyHead
 import argparse
 import random
 import sklearn.metrics
@@ -31,7 +31,7 @@ parser.add_argument('--load-model', default=False, action='store_true')
 parser.add_argument('--load-model-path', default="/pv/kaggle/bengali/bengali.pt", help='path to model to load')
 parser.add_argument('--valid-ratio', default=0.1, type=float, help='how much data is used for validation')
 parser.add_argument('--valid-shuffle', default=False, action='store_true',  help='which way to do validation')
-parser.add_argument('--senet', default=False, action='store_true', help='which model to use')
+parser.add_argument('--net', default=0, type=int, help='which model to use, 0:SEAttentionNet; 1:SENet; 2:SENetHeavyHead')
 parser.add_argument('--blur-ratio', default=0, type=float, help='blur ratio')
 parser.add_argument('--noise_ratio', default=0, type=float, help='noise ratio')
 parser.add_argument('--cutout-ratio', default=0, type=float, help='cutout ratio')
@@ -39,6 +39,7 @@ parser.add_argument('--elastic-distortion-ratio', default=0, type=float, help='e
 parser.add_argument('--random-brightness-ratio', default=0, type=float, help='random brightness ratio')
 parser.add_argument('--piece-affine-ratio', default=0, type=float, help='piece affine ratio')
 parser.add_argument('--ssr-ratio', default=0, type=float, help='ssr ratio')
+parser.add_argument('--affine', default=False, action='store_true', help='if use image affine')
 
 
 args = parser.parse_args()
@@ -119,14 +120,20 @@ def main():
     # create model
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16).to(device)
-    if args.senet:
-        model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
-                  dropout_p=0.2, inplanes=64, input_3x3=False,
-                  downsample_kernel_size=1, downsample_padding=0)
-    else:
+    if args.net == 0:
         model = SEAttentionNet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
                   dropout_p=0.2, inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0)
+    elif args.net == 1:
+        model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
+                  dropout_p=0.2, inplanes=64, input_3x3=False,
+                  downsample_kernel_size=1, downsample_padding=0)
+    elif args.net == 2:
+        model = SENetHeavyHead(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
+                  dropout_p=0.2, inplanes=64, input_3x3=False,
+                  downsample_kernel_size=1, downsample_padding=0)
+    else:
+        print("Undefined Net Option")
 
     if args.load_model:
         model.load_state_dict(torch.load(args.load_model_path))
@@ -161,7 +168,7 @@ def main():
 
 
     train_transform = Transform(
-    size=(128, 128), threshold=5.,
+    affine = args.affine, size=(128, 128), threshold=5.,
     sigma=-1., blur_ratio=args.blur_ratio, noise_ratio=args.noise_ratio, cutout_ratio=args.cutout_ratio,
     elastic_distortion_ratio=args.elastic_distortion_ratio, random_brightness_ratio=args.random_brightness_ratio,
     piece_affine_ratio=args.piece_affine_ratio, ssr_ratio=args.ssr_ratio)
@@ -171,7 +178,7 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     valid_transform = Transform(
-    size=(128, 128), threshold=5., sigma=-1.)  
+    affine = args.affine, size=(128, 128), threshold=5., sigma=-1.)  
     valid_dataset = BengaliAIDataset(valid_images, valid_labels,
                                  transform=valid_transform)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
