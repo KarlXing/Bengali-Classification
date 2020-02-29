@@ -254,14 +254,6 @@ def main():
     best_score = 0
 
     for epoch in range(args.epochs):
-        # train with normal data augmentation
-        train_losses = [0,0,0]
-        for inputs, labels in train_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            train_loss = dotrain(model, optimizer, criterion, inputs, labels)
-            for i in range(3):
-                train_losses[i] += train_loss[i]*inputs.shape[0]
-
         # train with grapheme root cutmix
         cutmix_losses = [0, 0, 0]
         for cutmix_loader in cutmix_loaders:
@@ -270,7 +262,14 @@ def main():
                 cutmix_loss = docutmixtrain(model, optimizer, criterion, inputs, labels, args.alpha)
                 for i in range(3):
                     cutmix_losses[i] += cutmix_loss[i]*inputs.shape[0]
-        
+
+        # train with normal data augmentation
+        train_losses = [0,0,0]
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            train_loss = dotrain(model, optimizer, criterion, inputs, labels)
+            for i in range(3):
+                train_losses[i] += train_loss[i]*inputs.shape[0]
 
 
         train_acc, train_scores, train_loss = dovalid(model, train_loader, device, criterion)
