@@ -253,7 +253,7 @@ def main():
     writer = SummaryWriter()
     best_score = 0
 
-    for i in range(args.epochs):
+    for epoch in range(args.epochs):
         # train with normal data augmentation
         train_losses = [0,0,0]
         for inputs, labels in train_loader:
@@ -274,17 +274,17 @@ def main():
 
 
         train_acc, train_scores, train_loss = dovalid(model, train_loader, device, criterion)
-        writer.add_scalars('train acc', {'acc1':train_acc[0], 'acc2': train_acc[1], 'acc3': train_acc[2]}, i)
-        writer.add_scalars('train score', {'score1':train_scores[0], 'score2': train_scores[1], 'score3': train_scores[2]}, i)
-        writer.add_scalars('train loss', {'loss1':train_loss[0], 'loss2': train_loss[1], 'loss3': train_loss[2]}, i)
+        writer.add_scalars('train acc', {'acc1':train_acc[0], 'acc2': train_acc[1], 'acc3': train_acc[2]}, epoch)
+        writer.add_scalars('train score', {'score1':train_scores[0], 'score2': train_scores[1], 'score3': train_scores[2]}, epoch)
+        writer.add_scalars('train loss', {'loss1':train_loss[0], 'loss2': train_loss[1], 'loss3': train_loss[2]}, epoch)
 
         valid_acc, valid_scores, valid_loss = dovalid(model, valid_loader, device, criterion)
-        writer.add_scalars('valid acc', {'acc1':valid_acc[0], 'acc2': valid_acc[1], 'acc3': valid_acc[2]}, i)
-        writer.add_scalars('valid score', {'score1':valid_scores[0], 'score2': valid_scores[1], 'score3': valid_scores[2]}, i)
-        writer.add_scalars('valid loss', {'loss1':valid_loss[0], 'loss2': valid_loss[1], 'loss3': valid_loss[2]}, i)
+        writer.add_scalars('valid acc', {'acc1':valid_acc[0], 'acc2': valid_acc[1], 'acc3': valid_acc[2]}, epoch)
+        writer.add_scalars('valid score', {'score1':valid_scores[0], 'score2': valid_scores[1], 'score3': valid_scores[2]}, epoch)
+        writer.add_scalars('valid loss', {'loss1':valid_loss[0], 'loss2': valid_loss[1], 'loss3': valid_loss[2]}, epoch)
 
 
-        print("epoch %d done" % (i))
+        print("epoch %d done" % (epoch))
 
         # save model
         score = (valid_scores[0]*2+valid_scores[1]+valid_scores[2])/4
