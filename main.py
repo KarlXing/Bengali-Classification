@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from utils import load_image, BengaliAIDataset, Transform, load_image_shuffle
+from utils import load_image, BengaliAIDataset, Transform, load_image_shuffle, rand_bbox
 from model import SENet, SEResNeXtBottleneck, SEAttentionNet, SENetHeavyHead
 import argparse
 import random
@@ -42,11 +42,42 @@ parser.add_argument('--piece-affine-ratio', default=0, type=float, help='piece a
 parser.add_argument('--ssr-ratio', default=0, type=float, help='ssr ratio')
 parser.add_argument('--affine', default=False, action='store_true', help='if use image affine')
 parser.add_argument('--threshold', default=100, type=float, help='threshold for cutout in image processing')
+parser.add_argument('--alpha', default=2.0, type=float, help='alpha value for cutmix')
+
 
 args = parser.parse_args()
 
-def docutmixvalid(model, dataloader, device, criterion):
-    pass
+
+def cutmix(data, labels, alpha):
+    indices = torch.randperm(data.size(0))
+    shuffled_labels = labels[indices]
+
+    lam = np.random.beta(alpha, alpha)
+    bbx1, bby1, bbx2, bby2 = rand_bbox(data.size(), lam)
+    data[:, :, bbx1:bbx2, bby1:bby2] = data[indices, :, bbx1:bbx2, bby1:bby2]
+    # adjust lambda to exactly match pixel ratio
+    lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (data.size()[-1] * data.size()[-2]))
+
+    return data, shuffled_labels, lam
+
+
+def docutmixtrain(model, optimizer, criterion, inputs, labels, alpha):
+    model.train()
+    optimizer.zero_grad()
+    inputs, shuffled_labels, lam = cutmix(inputs, labels, alpha)
+
+    output = model(inputs)
+    logit1, logit2, logit3 = output[:,: 168], output[:,168: 168+11], output[:,168+11:]
+
+    loss1 = criterion(logit1, labels[:, 0])
+    loss2 = criterion(logit2, labels[:, 1])
+    loss3 = criterion(logit3, labels[:, 2])
+    loss4 = criterion(logit1, shuffled_labels[:, 0])
+
+    (2*(loss1*lam + loss4*(1-lam))  +loss2+loss3).backward()
+    optimizer.step()
+
+    return [loss1.item(), loss2.item(), loss3.item()*lam+loss4.item()*(1-lam)]
 
 
 
@@ -170,6 +201,8 @@ def main():
         valid_images = np.take(images, valid_indices, axis=0)
         train_labels = np.take(labels, train_indices, axis=0)
         valid_labels = np.take(labels, valid_indices, axis=0)
+    
+    num_train = len(train_indices)
 
 
     train_transform = Transform(
@@ -215,16 +248,30 @@ def main():
     else:
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.25, patience=10, min_lr=1e-07)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.25, patience=6, min_lr=1e-07)
 
     writer = SummaryWriter()
     best_score = 0
 
     for i in range(args.epochs):
+        # train with normal data augmentation
+        train_losses = [0,0,0]
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             train_loss = dotrain(model, optimizer, criterion, inputs, labels)
-            writer.add_scalars('train loss', {'loss1':train_loss[0], 'loss2': train_loss[1], 'loss3': train_loss[2]}, i)
+            for i in range(3):
+                train_losses[i] += train_loss[i]*inputs.shape[0]
+
+        # train with grapheme root cutmix
+        cutmix_losses = [0, 0, 0]
+        for cutmix_loader in cutmix_loaders:
+            for inputs, labels in cutmix_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                cutmix_loss = docutmixtrain(model, optimizer, criterion, inputs, labels, args.alpha)
+                for i in range(3):
+                    cutmix_losses[i] += cutmix_loss[i]*inputs.shape[0]
+        
+
 
         train_acc, train_scores, train_loss = dovalid(model, train_loader, device, criterion)
         writer.add_scalars('train acc', {'acc1':train_acc[0], 'acc2': train_acc[1], 'acc3': train_acc[2]}, i)
@@ -246,6 +293,8 @@ def main():
             best_score = score
 
         if args.verbal:
+            print("Normal Train Losses: %f, %f, %f" % (train_losses[0]/num_train, train_losses[1]/num_train, train_losses[2]/num_train))
+            print("Cutmix Train Losses: %f, %f, %f" % (cutmix_losses[0]/num_train, cutmix_losses[1]/num_train, cutmix_losses[2]/num_train)) 
             print("Train ACC: %f, %f, %f" % (train_acc[0], train_acc[1], train_acc[2]))
             print("Train Scores: %f, %f, %f" % (train_scores[0], train_scores[1], train_scores[2]))
             print("Train Loss: %f, %f, %f" % (train_loss[0], train_loss[1], train_loss[2]))

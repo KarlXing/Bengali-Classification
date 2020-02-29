@@ -268,3 +268,20 @@ class Transform:
         else:
             return x  
 
+def rand_bbox(size, lam, bound=0.1):
+    W = size[2]
+    H = size[3]
+    cut_rat = np.sqrt(1. - lam)
+    cut_w = np.int(W * cut_rat)
+    cut_h = np.int(H * cut_rat)
+
+    # uniform
+    cx = np.random.randint(W)
+    cy = np.random.randint(H)
+
+    bbx1 = np.clip(cx - cut_w // 2, int(W*bound), int(W*(1-bound)))
+    bby1 = np.clip(cy - cut_h // 2, int(H*bound), int(H*(1-bound)))
+    bbx2 = np.clip(cx + cut_w // 2, int(W*bound), int(W*(1-bound)))
+    bby2 = np.clip(cy + cut_h // 2, int(H*bound), int(H*(1-bound)))
+
+    return bbx1, bby1, bbx2, bby2
