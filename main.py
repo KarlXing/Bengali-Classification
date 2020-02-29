@@ -34,7 +34,7 @@ parser.add_argument('--valid-ratio', default=0.1, type=float, help='how much dat
 parser.add_argument('--valid-shuffle', default=False, action='store_true',  help='which way to do validation')
 parser.add_argument('--net', default=0, type=int, help='which model to use, 0:SEAttentionNet; 1:SENet; 2:SENetHeavyHead')
 parser.add_argument('--blur-ratio', default=0, type=float, help='blur ratio')
-parser.add_argument('--noise_ratio', default=0, type=float, help='noise ratio')
+parser.add_argument('--noise-ratio', default=0, type=float, help='noise ratio')
 parser.add_argument('--cutout-ratio', default=0, type=float, help='cutout ratio')
 parser.add_argument('--elastic-distortion-ratio', default=0, type=float, help='elastic distortion ratio')
 parser.add_argument('--random-brightness-ratio', default=0, type=float, help='random brightness ratio')
