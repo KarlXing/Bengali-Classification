@@ -5,6 +5,7 @@ from model import SENet, SEResNeXtBottleneck, SEAttentionNet, SENetHeavyHead
 import argparse
 import random
 import sklearn.metrics
+from collections import defaultdict
 
 import torch
 from torch.utils.data import DataLoader
@@ -40,9 +41,13 @@ parser.add_argument('--random-brightness-ratio', default=0, type=float, help='ra
 parser.add_argument('--piece-affine-ratio', default=0, type=float, help='piece affine ratio')
 parser.add_argument('--ssr-ratio', default=0, type=float, help='ssr ratio')
 parser.add_argument('--affine', default=False, action='store_true', help='if use image affine')
-
+parser.add_argument('--threshold', default=100, type=float, help='threshold for cutout in image processing')
 
 args = parser.parse_args()
+
+def docutmixvalid(model, dataloader, device, criterion):
+    pass
+
 
 
 def dovalid(model, dataloader, device, criterion):
@@ -168,20 +173,38 @@ def main():
 
 
     train_transform = Transform(
-    affine = args.affine, size=(128, 128), threshold=5.,
-    sigma=-1., blur_ratio=args.blur_ratio, noise_ratio=args.noise_ratio, cutout_ratio=args.cutout_ratio,
-    elastic_distortion_ratio=args.elastic_distortion_ratio, random_brightness_ratio=args.random_brightness_ratio,
-    piece_affine_ratio=args.piece_affine_ratio, ssr_ratio=args.ssr_ratio)
+        affine = args.affine, size=(128, 128), threshold=args.threshold,
+        sigma=-1., blur_ratio=args.blur_ratio, noise_ratio=args.noise_ratio, cutout_ratio=args.cutout_ratio,
+        elastic_distortion_ratio=args.elastic_distortion_ratio, random_brightness_ratio=args.random_brightness_ratio,
+        piece_affine_ratio=args.piece_affine_ratio, ssr_ratio=args.ssr_ratio)
     # transform = Transform(size=(image_size, image_size))
     train_dataset = BengaliAIDataset(train_images, train_labels,
                                  transform=train_transform)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     valid_transform = Transform(
-    affine = args.affine, size=(128, 128), threshold=5., sigma=-1.)  
+        affine = args.affine, size=(128, 128), threshold=args.threshold, sigma=-1.)  
     valid_dataset = BengaliAIDataset(valid_images, valid_labels,
                                  transform=valid_transform)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+
+    # create train loaders for cutmix
+    cutmix_transform = Transform(
+        affine = args.affine, size=(128, 128), threshold=args.threshold, sigma=-1.)  
+
+    cutmix_loaders = []
+    grapheme_dict = defaultdict(list)
+    for i in range(train_labels.shape[0]):
+        label_v, label_c = train_labels[i][1], train_labels[i][2]
+        grapheme_dict['%2d%2d' % (label_v, label_c)].append(i)
+    
+    for _,v in grapheme_dict.items():
+        subimages = np.take(train_images, v, axis=0)
+        sublabels = np.take(train_labels, v, axis=0)
+        cutmix_dataset = BengaliAIDataset(subimages, sublabels,
+                                 transform=cutmix_transform)
+        cutmix_loaders.append(DataLoader(cutmix_dataset, batch_size = args.batch_size, shuffle=True, num_workers=args.num_workers))
+
 
     print("DataLoader Done")
     # train code
