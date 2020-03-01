@@ -291,9 +291,12 @@ def main():
             torch.save(model.state_dict(), args.save_path+"bengali.pt")
             best_score = score
 
+        train_losses = [loss/num_train for loss in train_losses]
+        cutmix_losses = [loss/num_train for loss in cutmix_losses]
+
         if args.verbal:
-            print("Normal Train Losses: %f, %f, %f" % (train_losses[0]/num_train, train_losses[1]/num_train, train_losses[2]/num_train))
-            print("Cutmix Train Losses: %f, %f, %f" % (cutmix_losses[0]/num_train, cutmix_losses[1]/num_train, cutmix_losses[2]/num_train)) 
+            print("Normal Train Losses: %f, %f, %f" % (train_losses[0], train_losses[1], train_losses[2]))
+            print("Cutmix Train Losses: %f, %f, %f" % (cutmix_losses[0], cutmix_losses[1], cutmix_losses[2])) 
             print("Train ACC: %f, %f, %f" % (train_acc[0], train_acc[1], train_acc[2]))
             print("Train Scores: %f, %f, %f" % (train_scores[0], train_scores[1], train_scores[2]))
             print("Train Loss: %f, %f, %f" % (train_loss[0], train_loss[1], train_loss[2]))
@@ -302,7 +305,8 @@ def main():
             print("Valid Loss: %f, %f, %f" % (valid_loss[0], valid_loss[1], valid_loss[2]))
             print("Best Score: ", best_score)
 
-        scheduler.step(valid_loss[0]*0.5+valid_loss[1]*0.25+valid_loss[2]*0.25)
+        scheduler_loss = np.average(train_losses, weights=[2,1,1]) + np.average(cutmix_losses, weights=[2,1,1])
+        scheduler.step(scheduler_loss)
 
 if __name__ == "__main__":
     main()
