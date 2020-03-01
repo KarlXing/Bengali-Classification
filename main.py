@@ -204,7 +204,6 @@ def main():
     
     num_train = len(train_indices)
 
-
     train_transform = Transform(
         affine = args.affine, size=(128, 128), threshold=args.threshold,
         sigma=-1., blur_ratio=args.blur_ratio, noise_ratio=args.noise_ratio, cutout_ratio=args.cutout_ratio,
@@ -231,12 +230,16 @@ def main():
         label_v, label_c = train_labels[i][1], train_labels[i][2]
         grapheme_dict['%2d%2d' % (label_v, label_c)].append(i)
     
+    idx, iter_idxes = 0, []
     for _,v in grapheme_dict.items():
         subimages = np.take(train_images, v, axis=0)
         sublabels = np.take(train_labels, v, axis=0)
         cutmix_dataset = BengaliAIDataset(subimages, sublabels,
                                  transform=cutmix_transform)
         cutmix_loaders.append(DataLoader(cutmix_dataset, batch_size = args.batch_size, shuffle=True, num_workers=args.num_workers))
+        iter_idxes += [idx]*(len(cutmix_dataset)//args.batch_size)
+        idx += 1
+    iter_idxes += [idx]*(len(train_dataset)//args.batch_size)
 
 
     print("DataLoader Done")
@@ -254,22 +257,42 @@ def main():
     best_score = 0
 
     for epoch in range(args.epochs):
-        # train with grapheme root cutmix
+        random.shuffle(iter_idxes)
+        all_iters = [iter(loader) for loader in cutmix_loaders]
+        all_iters.append(iter(train_loader))
+
         cutmix_losses = [0, 0, 0]
-        for cutmix_loader in cutmix_loaders:
-            for inputs, labels in cutmix_loader:
-                inputs, labels = inputs.to(device), labels.to(device)
+        train_losses = [0, 0, 0]
+
+        for idx in iter_idxes:
+            dataiter = all_iters[idx]
+            inputs, labels = next(dataiter)
+            inputs, labels = inputs.to(device), labels.to(device)
+            if idx < len(all_iters)-1:
+                train_loss = dotrain(model, optimizer, criterion, inputs, labels)
+                for i in range(3):
+                    train_losses[i] += train_loss[i]*inputs.shape[0]
+            else:
                 cutmix_loss = docutmixtrain(model, optimizer, criterion, inputs, labels, args.alpha)
                 for i in range(3):
                     cutmix_losses[i] += cutmix_loss[i]*inputs.shape[0]
 
-        # train with normal data augmentation
-        train_losses = [0,0,0]
-        for inputs, labels in train_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            train_loss = dotrain(model, optimizer, criterion, inputs, labels)
-            for i in range(3):
-                train_losses[i] += train_loss[i]*inputs.shape[0]
+        # # train with grapheme root cutmix
+        # cutmix_losses = [0, 0, 0]
+        # for cutmix_loader in cutmix_loaders:
+        #     for inputs, labels in cutmix_loader:
+        #         inputs, labels = inputs.to(device), labels.to(device)
+        #         cutmix_loss = docutmixtrain(model, optimizer, criterion, inputs, labels, args.alpha)
+        #         for i in range(3):
+        #             cutmix_losses[i] += cutmix_loss[i]*inputs.shape[0]
+
+        # # train with normal data augmentation
+        # train_losses = [0, 0, 0]
+        # for inputs, labels in train_loader:
+        #     inputs, labels = inputs.to(device), labels.to(device)
+        #     train_loss = dotrain(model, optimizer, criterion, inputs, labels)
+        #     for i in range(3):
+        #         train_losses[i] += train_loss[i]*inputs.shape[0]
 
 
         train_acc, train_scores, train_loss = dovalid(model, train_loader, device, criterion)
