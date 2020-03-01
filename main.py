@@ -330,6 +330,8 @@ def main():
 
         scheduler_loss = np.average(train_losses, weights=[2,1,1]) + np.average(cutmix_losses, weights=[2,1,1])
         scheduler.step(scheduler_loss)
+        all_iters.clear()
+
 
 if __name__ == "__main__":
     main()
